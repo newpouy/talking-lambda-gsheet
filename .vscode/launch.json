@@ -1,0 +1,23 @@
+
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Serverless",
+      "program": "${workspaceFolder}/node_modules/.bin/sls",
+      "cwd": "${workspaceFolder}",
+      "args": [
+        "invoke",
+        "local",
+        "-f",
+        "hello",
+        "--data",
+        "{}"  
+      ],
+      "sourceMaps": true,
+      "smartStep": true
+    }
+  ]
+}

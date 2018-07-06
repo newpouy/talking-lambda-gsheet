@@ -88,3 +88,20 @@ function listMajors(auth) {
     }
   });
 }
+
+exports.handler = async (event) => {    
+  function wait(){
+      return new Promise((resolve, reject) => {
+          setTimeout(() => resolve("hello"), 2000)
+      });
+  }
+  
+  console.log(await wait());
+  console.log(await wait());
+  console.log(await wait());
+  console.log(await wait());
+  console.log(await wait());
+  console.log(await wait());
+  
+  return 'exiting'
+};
