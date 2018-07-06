@@ -1,0 +1,8 @@
+{
+  "dependencies": {
+    "googleapis": "^27.0.0"
+  },
+  "devDependencies": {
+    "serverless": "^1.28.0"
+  }
+}
