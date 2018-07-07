@@ -8,29 +8,23 @@ const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'credentials.json';
 
 var getFile = function (filename) {
-  console.log('getFile', filename)
-  // return fs.readFileAsync(filename, "utf8");
+  // console.log('getFile', filename)
   return fs.readFileAsync(filename, "utf8")
 };
 
-var getCredentials = function(TOKEN_PATH) {
-  console.log('getCredentials', Token)
-  return fs.readFileAsync(TOKEN_PATH, "utf8")
-}
-
 var getParsedCredentials = function(credentials) {
-  console.log('getParsedCredentials',credentials)
+  // console.log('getParsedCredentials',credentials)
   return new Promise((resolve, reject) => {
     resolve(JSON.parse(credentials))
   })
 }
 var getAuthClient = function(parced_credentials) {
-  console.log('getAuthClient' ,parced_credentials)
+  // console.log('getAuthClient' ,parced_credentials)
   const {client_secret, client_id, redirect_uris} = parced_credentials.installed;
   const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
   return new Promise((resolve, reject) => {
     getFile(TOKEN_PATH).then((token) => {
-      console.log(token)
+      // console.log(token)
       resolve({oAuth2Client, token})
     }).catch((err) => {
       console.log('errrrrr', err)
@@ -38,42 +32,11 @@ var getAuthClient = function(parced_credentials) {
   })
 }
 var setToken = function(one) {
-  console.log('setToken', one)
+  // console.log('setToken', one)
   one.oAuth2Client.setCredentials(JSON.parse(one.token));
   return new Promise((resolve, reject) => {
     resolve(one.oAuth2Client)
   })
-}
-// client_secret파일을 읽어서
-// JSON.parse하여 credentials을 만든 후에
-// credential을 분해하여 oAuth2Client를 만들고
-// token을 읽어서 oAuth2Client에 셋팅하여
-// listMajors함수에 oAuth2Client를 인자로 넣어 호출한다. 
-
-// fs.readFile('client_secret.json', (err, content) => {                            
-//   if (err) return console.log('Error loading client secret file:', err);         
-//   console.log(content)                     
-//   // Authorize a client with credentials, then call the Google Sheets API.
-//   authorize(JSON.parse(content), listMajors);              
-// });
-
-/**
- * Create an OAuth2 client with the given credentials, and then execute the
- * given callback function.
- * @param {Object} credentials The authorization client credentials.
- * @param {function} callback The callback to call with the authorized client.
- */
-function authorize(credentials, callback) {
-  const {client_secret, client_id, redirect_uris} = credentials.installed;
-  const oAuth2Client = new google.auth.OAuth2(
-      client_id, client_secret, redirect_uris[0]);
-
-  // Check if we have previously stored a token.
-  fs.readFile(TOKEN_PATH, (err, token) => {
-    if (err) return getNewToken(oAuth2Client, callback);
-    oAuth2Client.setCredentials(JSON.parse(token));
-    callback(oAuth2Client);
-  });
 }
 
 /**
@@ -112,31 +75,72 @@ function getNewToken(oAuth2Client, callback) {
  * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
  * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
  */
-function listMajors(auth) {
+function listMajors(auth, user_key) {
+  // console.log('listMajors', auth, user_key)
   const sheets = google.sheets({version: 'v4', auth});
   sheets.spreadsheets.values.get({
     // spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
     spreadsheetId: config.spreadsheetId,
-    range: 'Noel!A2:E',
+    range: `${user_key}!A2:P`,
   }, (err, res) => {
     if (err) return console.log('The API returned an error: ' + err);
     const rows = res.data.values;
     if (rows.length) {
-      console.log('Name, Major:');
-      // Print columns A and E, which correspond to indices 0 and 4.
-      rows.map((row) => {
-        console.log(`${row[0]}, ${row[4]}`);
-      });
+      console.log('Name, Major:',user_key);
+      // Print columns A and E, which corres
+        return new Promise((resolve, reject) => {
+          console.log('rows',rows)
+          resolve(rows)
+        })
     } else {
       console.log('No data found.');
     }
   });
 }
 
-exports.handler = (event) => {    
+function makeData(wordData) {
+  console.log('rows', wordData)
+  var data = {
+    "message": {
+      "text": wordData,
+      
+    //   "photo": {
+    //     "url": "https://photo.src",
+    //     "width": 640,
+    //     "height": 480
+    //   },
+    //   "message_button": {
+    //     "label": "주유 쿠폰받기",
+    //     "url": "https://coupon/url"
+    //   }
+    },
+    "keyboard": {
+      "type": "buttons",
+      "buttons": [
+        "복습",
+        "리뷰",
+        "hot"
+      ]
+    }
+  }
+   
+  // });  // rows.map((row) => {
+ 
+  console.log('data', data)
+  return data
+}
+
+exports.handler = (event) => {
+  // console.log(event)
   getFile('client_secret.json')
   .then(getParsedCredentials)
   .then(getAuthClient)
   .then(setToken)
-  .then(listMajors)
+  .then((auth) => {
+    listMajors(auth, event.user_key)
+      .then((sheet_data) => {
+        console.log(sheet_data)
+        return makeData(sheet_data.join(", "));
+      })    
+  })
 };
