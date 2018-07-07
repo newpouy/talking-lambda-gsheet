@@ -1,4 +1,5 @@
-const fs = require('fs');
+var Promise = require('bluebird');
+var fs = Promise.promisifyAll(require('fs'));
 const readline = require('readline');
 const {google} = require('googleapis');
 const config = require('./config.js')
@@ -6,12 +7,55 @@ const config = require('./config.js')
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'credentials.json';
 
-// Load client secrets from a local file.
-fs.readFile('client_secret.json', (err, content) => {
-  if (err) return console.log('Error loading client secret file:', err);
-  // Authorize a client with credentials, then call the Google Sheets API.
-  authorize(JSON.parse(content), listMajors);
-});
+var getFile = function (filename) {
+  console.log('getFile', filename)
+  // return fs.readFileAsync(filename, "utf8");
+  return fs.readFileAsync(filename, "utf8")
+};
+
+var getCredentials = function(TOKEN_PATH) {
+  console.log('getCredentials', Token)
+  return fs.readFileAsync(TOKEN_PATH, "utf8")
+}
+
+var getParsedCredentials = function(credentials) {
+  console.log('getParsedCredentials',credentials)
+  return new Promise((resolve, reject) => {
+    resolve(JSON.parse(credentials))
+  })
+}
+var getAuthClient = function(parced_credentials) {
+  console.log('getAuthClient' ,parced_credentials)
+  const {client_secret, client_id, redirect_uris} = parced_credentials.installed;
+  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
+  return new Promise((resolve, reject) => {
+    getFile(TOKEN_PATH).then((token) => {
+      console.log(token)
+      resolve({oAuth2Client, token})
+    }).catch((err) => {
+      console.log('errrrrr', err)
+    })
+  })
+}
+var setToken = function(one) {
+  console.log('setToken', one)
+  one.oAuth2Client.setCredentials(JSON.parse(one.token));
+  return new Promise((resolve, reject) => {
+    resolve(one.oAuth2Client)
+  })
+}
+// client_secret파일을 읽어서
+// JSON.parse하여 credentials을 만든 후에
+// credential을 분해하여 oAuth2Client를 만들고
+// token을 읽어서 oAuth2Client에 셋팅하여
+// listMajors함수에 oAuth2Client를 인자로 넣어 호출한다. 
+
+// fs.readFile('client_secret.json', (err, content) => {                            
+//   if (err) return console.log('Error loading client secret file:', err);         
+//   console.log(content)                     
+//   // Authorize a client with credentials, then call the Google Sheets API.
+//   authorize(JSON.parse(content), listMajors);              
+// });
 
 /**
  * Create an OAuth2 client with the given credentials, and then execute the
@@ -89,19 +133,10 @@ function listMajors(auth) {
   });
 }
 
-exports.handler = async (event) => {    
-  function wait(){
-      return new Promise((resolve, reject) => {
-          setTimeout(() => resolve("hello"), 2000)
-      });
-  }
-  
-  console.log(await wait());
-  console.log(await wait());
-  console.log(await wait());
-  console.log(await wait());
-  console.log(await wait());
-  console.log(await wait());
-  
-  return 'exiting'
+exports.handler = (event) => {    
+  getFile('client_secret.json')
+  .then(getParsedCredentials)
+  .then(getAuthClient)
+  .then(setToken)
+  .then(listMajors)
 };
