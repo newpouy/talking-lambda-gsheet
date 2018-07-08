@@ -1,5 +1,6 @@
 var Promise = require('bluebird');
 var fs = Promise.promisifyAll(require('fs'));
+// var fs = require('fs');
 const readline = require('readline');
 const {google} = require('googleapis');
 const config = require('./config.js')
@@ -7,24 +8,24 @@ const config = require('./config.js')
 const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
 const TOKEN_PATH = 'credentials.json';
 
-var getFile = function (filename) {
-  // console.log('getFile', filename)
-  return fs.readFileAsync(filename, "utf8")
+var getFile = async (filename) => {
+  console.log('getFile', filename)
+  return await fs.readFileAsync(filename, "utf8")
 };
 
-var getParsedCredentials = function(credentials) {
+var getParsedCredentials = async (credentials) => {
   // console.log('getParsedCredentials',credentials)
   return new Promise((resolve, reject) => {
     resolve(JSON.parse(credentials))
   })
 }
-var getAuthClient = function(parced_credentials) {
-  // console.log('getAuthClient' ,parced_credentials)
+var getAuthClient = async (parced_credentials) => {
+  console.log('getAuthClient' ,parced_credentials)
   const {client_secret, client_id, redirect_uris} = parced_credentials.installed;
   const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
   return new Promise((resolve, reject) => {
     getFile(TOKEN_PATH).then((token) => {
-      // console.log(token)
+      console.log('in get',token)
       resolve({oAuth2Client, token})
     }).catch((err) => {
       console.log('errrrrr', err)
@@ -32,7 +33,7 @@ var getAuthClient = function(parced_credentials) {
   })
 }
 var setToken = function(one) {
-  // console.log('setToken', one)
+  console.log('setToken', one)
   one.oAuth2Client.setCredentials(JSON.parse(one.token));
   return new Promise((resolve, reject) => {
     resolve(one.oAuth2Client)
@@ -75,35 +76,30 @@ function getNewToken(oAuth2Client, callback) {
  * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
  * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
  */
-function listMajors(auth, user_key) {
-  // console.log('listMajors', auth, user_key)
+var listMajors = async (auth, user_key) => {
+  console.log('listMajors', auth, user_key)
   const sheets = google.sheets({version: 'v4', auth});
-  sheets.spreadsheets.values.get({
-    // spreadsheetId: '1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms',
+  let promisfyGet = Promise.promisify(sheets.spreadsheets.values.get);
+  return await promisfyGet({
     spreadsheetId: config.spreadsheetId,
-    range: `${user_key}!A2:P`,
-  }, (err, res) => {
-    if (err) return console.log('The API returned an error: ' + err);
-    const rows = res.data.values;
-    if (rows.length) {
-      console.log('Name, Major:',user_key);
-      // Print columns A and E, which corres
-        return new Promise((resolve, reject) => {
-          console.log('rows',rows)
-          resolve(rows)
-        })
-    } else {
-      console.log('No data found.');
-    }
-  });
+    range: `${user_key}!E2:G3`,
+  })
 }
-
+function beautify(workData) {
+  let result =''
+  for(let i=0; i<workData.length; i++) {
+    for(let j=0; j<workData[i].length; j++) {
+      console.log(workData[i][j])
+        result += workData[i][j].concat('; ')
+    }
+  }
+  return result
+}
 function makeData(wordData) {
-  console.log('rows', wordData)
+  let beatifiedData = beautify(wordData)
   var data = {
     "message": {
-      "text": wordData,
-      
+      "text": beatifiedData,    
     //   "photo": {
     //     "url": "https://photo.src",
     //     "width": 640,
@@ -123,24 +119,21 @@ function makeData(wordData) {
       ]
     }
   }
-   
-  // });  // rows.map((row) => {
- 
-  console.log('data', data)
   return data
 }
 
-exports.handler = (event) => {
-  // console.log(event)
-  getFile('client_secret.json')
-  .then(getParsedCredentials)
-  .then(getAuthClient)
-  .then(setToken)
-  .then((auth) => {
-    listMajors(auth, event.user_key)
-      .then((sheet_data) => {
-        console.log(sheet_data)
-        return makeData(sheet_data.join(", "));
-      })    
-  })
+exports.handler = async (event) => {
+
+  try { 
+    let file = await getFile('client_secret.json')
+    let parsed_cred = await getParsedCredentials(file)
+    let authClient = await getAuthClient(parsed_cred)
+    let authentcated_token = await setToken(authClient)
+    let response = await listMajors(authentcated_token, event.user_key)
+    // console.log('list',response.data.values)
+    return makeData(response.data.values)
+  } catch (err) {
+    console.log('err',err)
+  }
+
 };
