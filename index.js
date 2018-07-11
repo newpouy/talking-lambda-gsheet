@@ -76,27 +76,38 @@ function getNewToken(oAuth2Client, callback) {
  * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
  * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
  */
-var listMajors = async (auth, user_key) => {
-  console.log('listMajors', auth, user_key)
+var listMajors = async (auth, user_key, target) => {
+  // console.log('listMajors', auth, user_key)
   const sheets = google.sheets({version: 'v4', auth});
   let promisfyGet = Promise.promisify(sheets.spreadsheets.values.get);
   return await promisfyGet({
     spreadsheetId: config.spreadsheetId,
-    range: `${user_key}!E2:G3`,
+    // range: `${user_key}!E2:G2`,
+    range: `${user_key}${target}`,
   })
 }
-function beautify(workData) {
+function beautify(wordData) {
   let result =''
-  for(let i=0; i<workData.length; i++) {
-    for(let j=0; j<workData[i].length; j++) {
-      console.log(workData[i][j])
-        result += workData[i][j].concat('; ')
+  for(let i=0; i<wordData.length; i++) {
+    for(let j=0; j<wordData[i].length; j++) {
+      console.log(wordData[i][j])
+        result += wordData[i][j].concat(', ')
     }
   }
   return result
 }
+function makeButtonArray(wordData) {
+  let arr = wordData[0].map((el, index) => {
+    console.log(index, el, `${index+1}. `.concat(el))
+    return `<<${index+1}>> `.concat(el)
+    // return `<<@@>> `.concat(el)
+  })
+  arr.push('HOME!')
+  return arr
+}
 function makeData(wordData) {
   let beatifiedData = beautify(wordData)
+  var btnArr = makeButtonArray(wordData)
   var data = {
     "message": {
       "text": beatifiedData,    
@@ -112,28 +123,66 @@ function makeData(wordData) {
     },
     "keyboard": {
       "type": "buttons",
-      "buttons": [
-        "복습",
-        "리뷰",
-        "hot"
-      ]
+      "buttons": btnArr
     }
   }
+  console.log(data)
   return data
 }
+function makeSentece() {
 
+}
 exports.handler = async (event) => {
-
-  try { 
-    let file = await getFile('client_secret.json')
-    let parsed_cred = await getParsedCredentials(file)
-    let authClient = await getAuthClient(parsed_cred)
-    let authentcated_token = await setToken(authClient)
-    let response = await listMajors(authentcated_token, event.user_key)
-    // console.log('list',response.data.values)
-    return makeData(response.data.values)
-  } catch (err) {
-    console.log('err',err)
+  if(event.content=='GET %$#!' || event.content=='HOME!') {
+    return {
+      "message": {
+        "text": event.user_key,    
+      },
+      "keyboard": {
+        "type": "buttons",
+        "buttons": ["MY NOTE!", "MAGAZINE!", "GET %$#!"]
+      }
+    }
+  } else if (event.content.startsWith('<<')) {
+    var raw_word = event.content.replace('<< ','').replace('>>','');
+    // console.log('raw_word',raw_word)
+    // var removeNumWord = raw_word.substring(2,raw_word.length)
+    // console.log('removeNumWord',removeNumWord)
+    var num = raw_word.substring(2,3)
+    // console.log('num',num)
+    var cellNumArr = ['I','J','K']
+    try {       
+      let file = await getFile('client_secret.json')
+      let parsed_cred = await getParsedCredentials(file)
+      let authClient = await getAuthClient(parsed_cred)
+      let authentcated_token = await setToken(authClient)
+      let response = await listMajors(authentcated_token, event.user_key, `!${cellNumArr[parseInt(num)-1]}2`)
+      // console.log('list',response.data.values)
+      return makeData(response.data.values)
+    } catch (err) {
+      console.log('err',err)
+    }
+    return {
+      "message": {
+        "text": word
+      },
+      "keyboard": {
+        "type": "buttons",
+        "buttons": ["MY NOTE!", "MAGAZINE!", "GET %$#!"]
+      }
+    }
+  } else { 
+    try {       
+      let file = await getFile('client_secret.json')
+      let parsed_cred = await getParsedCredentials(file)
+      let authClient = await getAuthClient(parsed_cred)
+      let authentcated_token = await setToken(authClient)
+      let response = await listMajors(authentcated_token, event.user_key, '!E2:G2')
+      // console.log('list',response.data.values)
+      return makeData(response.data.values)
+    } catch (err) {
+      console.log('err',err)
+    }
   }
 
 };
