@@ -1,188 +1,114 @@
-var Promise = require('bluebird');
-var fs = Promise.promisifyAll(require('fs'));
-// var fs = require('fs');
-const readline = require('readline');
-const {google} = require('googleapis');
-const config = require('./config.js')
-// If modifying these scopes, delete credentials.json.
-const SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly'];
-const TOKEN_PATH = 'credentials.json';
+const googleApi = require('./googleApi')
 
-var getFile = async (filename) => {
-  console.log('getFile', filename)
-  return await fs.readFileAsync(filename, "utf8")
-};
-
-var getParsedCredentials = async (credentials) => {
-  // console.log('getParsedCredentials',credentials)
-  return new Promise((resolve, reject) => {
-    resolve(JSON.parse(credentials))
-  })
-}
-var getAuthClient = async (parced_credentials) => {
-  console.log('getAuthClient' ,parced_credentials)
-  const {client_secret, client_id, redirect_uris} = parced_credentials.installed;
-  const oAuth2Client = new google.auth.OAuth2(client_id, client_secret, redirect_uris[0]);
-  return new Promise((resolve, reject) => {
-    getFile(TOKEN_PATH).then((token) => {
-      console.log('in get',token)
-      resolve({oAuth2Client, token})
-    }).catch((err) => {
-      console.log('errrrrr', err)
-    })
-  })
-}
-var setToken = function(one) {
-  console.log('setToken', one)
-  one.oAuth2Client.setCredentials(JSON.parse(one.token));
-  return new Promise((resolve, reject) => {
-    resolve(one.oAuth2Client)
-  })
-}
-
-/**
- * Get and store new token after prompting for user authorization, and then
- * execute the given callback with the authorized OAuth2 client.
- * @param {google.auth.OAuth2} oAuth2Client The OAuth2 client to get token for.
- * @param {getEventsCallback} callback The callback for the authorized client.
- */
-function getNewToken(oAuth2Client, callback) {
-  const authUrl = oAuth2Client.generateAuthUrl({
-    access_type: 'offline',
-    scope: SCOPES,
-  });
-  console.log('Authorize this app by visiting this url:', authUrl);
-  const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
-  });
-  rl.question('Enter the code from that page here: ', (code) => {
-    rl.close();
-    oAuth2Client.getToken(code, (err, token) => {
-      if (err) return callback(err);
-      oAuth2Client.setCredentials(token);
-      // Store the token to disk for later program executions
-      fs.writeFile(TOKEN_PATH, JSON.stringify(token), (err) => {
-        if (err) console.error(err);
-        console.log('Token stored to', TOKEN_PATH);
-      });
-      callback(oAuth2Client);
-    });
-  });
-}
-
-/**
- * Prints the names and majors of students in a sample spreadsheet:
- * @see https://docs.google.com/spreadsheets/d/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/edit
- * @param {google.auth.OAuth2} auth The authenticated Google OAuth client.
- */
-var listMajors = async (auth, user_key, target) => {
-  // console.log('listMajors', auth, user_key)
-  const sheets = google.sheets({version: 'v4', auth});
-  let promisfyGet = Promise.promisify(sheets.spreadsheets.values.get);
-  return await promisfyGet({
-    spreadsheetId: config.spreadsheetId,
-    // range: `${user_key}!E2:G2`,
-    range: `${user_key}${target}`,
-  })
-}
 function beautify(wordData) {
   let result =''
   for(let i=0; i<wordData.length; i++) {
     for(let j=0; j<wordData[i].length; j++) {
-      console.log(wordData[i][j])
-        result += wordData[i][j].concat(', ')
+      // console.log(wordData[i][j])
+      result += wordData[i][j];
+      if(j < wordData[i].length-1) {
+        result += ', '
+      }
     }
   }
   return result
 }
+
 function makeButtonArray(wordData) {
-  let arr = wordData[0].map((el, index) => {
+  let btnNum = 5; // also represent words count
+  // let limitedArr = wordData[0];
+  let limitedArr = wordData[0].filter((el, index) => index < btnNum)
+  let arr = limitedArr.map((el, index) => {
     console.log(index, el, `${index+1}. `.concat(el))
-    return `<<${index+1}>> `.concat(el)
+    return `<${index+1}> `.concat(el)
     // return `<<@@>> `.concat(el)
   })
-  arr.push('HOME!')
+  arr.push('# HOME')
   return arr
 }
-function makeData(wordData) {
-  let beatifiedData = beautify(wordData)
+
+function makeData(wordData, num) {
+  console.log('ma',wordData, num)
+  let newWordData = [[]];
+  newWordData[0][0] = num ? wordData[0][parseInt(num)+4] : wordData[0][0]; // magic number 4 = 일일 리뷰할 표현 갯수 - 1
+  let beatifiedData = beautify(newWordData)
   var btnArr = makeButtonArray(wordData)
   var data = {
     "message": {
       "text": beatifiedData,    
-    //   "photo": {
-    //     "url": "https://photo.src",
-    //     "width": 640,
-    //     "height": 480
-    //   },
-    //   "message_button": {
-    //     "label": "주유 쿠폰받기",
-    //     "url": "https://coupon/url"
-    //   }
     },
     "keyboard": {
       "type": "buttons",
       "buttons": btnArr
     }
   }
-  console.log(data)
+  // console.log(data)
   return data
 }
-function makeSentece() {
 
-}
+
 exports.handler = async (event) => {
-  if(event.content=='GET %$#!' || event.content=='HOME!') {
+  if(event.content=='# Get key' || event.content=='# HOME') {
     return {
       "message": {
         "text": event.user_key,    
       },
       "keyboard": {
         "type": "buttons",
-        "buttons": ["MY NOTE!", "MAGAZINE!", "GET %$#!"]
+        "buttons": ["# My Note", "# Go Magazine", "# Get key"]
       }
     }
-  } else if (event.content.startsWith('<<')) {
-    var raw_word = event.content.replace('<< ','').replace('>>','');
+  } else if (event.content=='# Go Magazine') {
+    console.log('# Go Magazine', megazineStaticData)
+    return megazineStaticData;
+  } else if (event.content.startsWith('<')) {
+    var raw_word = event.content.replace('<','').replace('> ','');
     // console.log('raw_word',raw_word)
-    // var removeNumWord = raw_word.substring(2,raw_word.length)
-    // console.log('removeNumWord',removeNumWord)
-    var num = raw_word.substring(2,3)
+    var num = raw_word.substring(0,1)
     // console.log('num',num)
-    var cellNumArr = ['I','J','K']
-    try {       
-      let file = await getFile('client_secret.json')
-      let parsed_cred = await getParsedCredentials(file)
-      let authClient = await getAuthClient(parsed_cred)
-      let authentcated_token = await setToken(authClient)
-      let response = await listMajors(authentcated_token, event.user_key, `!${cellNumArr[parseInt(num)-1]}2`)
-      // console.log('list',response.data.values)
-      return makeData(response.data.values)
+    var cellNumArr = ['J', 'K', 'L', 'M', 'N'] // 예문이 기록된 셀 rows
+    try {
+      let data = await googleApi.getData(event.user_key, `!E2:${cellNumArr[parseInt(num)-1]}2`)
+      return makeData(data, num)
     } catch (err) {
       console.log('err',err)
-    }
-    return {
-      "message": {
-        "text": word
-      },
-      "keyboard": {
-        "type": "buttons",
-        "buttons": ["MY NOTE!", "MAGAZINE!", "GET %$#!"]
+      return {
+        "message": {
+          "text": word
+        },
+        "keyboard": {
+          "type": "buttons",
+          "buttons": ["# My Note", "# Go Magazine", "# Get key"]
+        }
       }
     }
   } else { 
     try {       
-      let file = await getFile('client_secret.json')
-      let parsed_cred = await getParsedCredentials(file)
-      let authClient = await getAuthClient(parsed_cred)
-      let authentcated_token = await setToken(authClient)
-      let response = await listMajors(authentcated_token, event.user_key, '!E2:G2')
+      let data = await googleApi.getData(event.user_key, '!E2:I2')
       // console.log('list',response.data.values)
-      return makeData(response.data.values)
+      return makeData(data)
     } catch (err) {
       console.log('err',err)
     }
   }
 
 };
+
+const megazineStaticData = {
+  "message": {
+    "text": "Talking Magazine",    
+    "photo": {
+      "url": "http://newpouypekr.cafe24.com/wp-content/uploads/2018/06/test-780x439.jpg",
+      "width": 640,
+      "height": 480
+    },
+    "message_button": {
+      "label": "Go Talking",
+      "url": "http://newpouypekr.cafe24.com/"
+    }
+  },
+  "keyboard": {
+    "type": "buttons",
+    "buttons": ["# My Note", "# Go Magazine", "# Get key"]
+  }
+}
